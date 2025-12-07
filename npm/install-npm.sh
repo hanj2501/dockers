@@ -158,7 +158,7 @@ check_and_create_network() {
         print_warning "'$NETWORK_NAME' 네트워크가 존재하지 않습니다."
         print_info "'$NETWORK_NAME' 네트워크를 생성합니다..."
         
-        docker network create $NETWORK_NAME
+        docker network create --driver=bridge $NETWORK_NAME 
         print_success "'$NETWORK_NAME' 네트워크가 생성되었습니다."
     fi
 }
