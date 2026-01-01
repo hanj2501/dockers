@@ -51,11 +51,9 @@ curl -fsSL https://get.docker.com | sudo bash
 
 ### 1. 스크립트 다운로드
 ```bash
-# Git으로 다운로드
-git clone <repository-url>
-cd nginx-ssh-installer
-
-# 또는 직접 다운로드
+# 직접 다운로드
+curl https://raw.githubusercontent.com/hanj2501/dockers/main/nginx-ssh/install-nginx-ssh.sh
+# 또는 
 wget https://raw.githubusercontent.com/hanj2501/dockers/main/nginx-ssh/install-nginx-ssh.sh
 chmod +x install-nginx-ssh.sh
 ```
