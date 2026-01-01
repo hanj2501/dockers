@@ -257,8 +257,17 @@ create_directories() {
 EOF
     fi
     
+    # 현재 로그인된 사용자 확인
+    REAL_USER=${SUDO_USER:-$USER}
+    
+    # 소유자를 실제 사용자로 변경
+    chown -R $REAL_USER:$REAL_USER html
+    
+    # index.html도 소유자 변경
+    chown $REAL_USER:$REAL_USER html/index.html
+    
     print_success "디렉토리 생성 완료"
-    echo "  - ~/html/ (웹 루트 디렉토리)"
+    echo "  - ~/html/ (웹 루트 디렉토리, 소유자: $REAL_USER)"
 }
 
 ################################################################################
@@ -339,13 +348,23 @@ server {
 
     server_name _;
 
+    # 정적 파일 캐시(선택)
+    location ~* \.(js|css|png|jpg|jpeg|gif|svg|ico)$ {
+      try_files $uri =404;
+      add_header Cache-Control "public, max-age=31536000, immutable";
+    }
+
+    # SPA history fallback
     location / {
-        try_files $uri $uri/ =404;
+      try_files $uri $uri/ /index.html;
     }
 
     # 로그 설정
     access_log /var/log/nginx/access.log;
     error_log /var/log/nginx/error.log;
+
+    # 업로드 제한
+    client_max_body_size 100m;
 }
 EOF
     
