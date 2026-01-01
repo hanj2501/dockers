@@ -180,6 +180,7 @@ get_user_input() {
     echo "SSH 사용자      : $SSH_USER"
     echo "타임존          : $TIMEZONE"
     echo "HTML 경로       : html/"
+    echo "Nginx 설정 경로 : nginx-conf/"
     echo ""
     read -p "이 설정으로 진행하시겠습니까? (y/N): " CONFIRM
     
@@ -214,6 +215,9 @@ create_directories() {
     
     # HTML 디렉토리 생성
     mkdir -p html
+    
+    # Nginx 설정 디렉토리 생성
+    mkdir -p nginx-conf/conf.d
     
     # 기본 index.html 생성
     if [ ! -f html/index.html ]; then
@@ -257,17 +261,178 @@ create_directories() {
 EOF
     fi
     
+    # 예제 Nginx 설정 파일 생성 (conf.d)
+    if [ ! -f nginx-conf/conf.d/example.conf.sample ]; then
+        cat > ./nginx-conf/conf.d/example.conf.sample << 'EOF'
+# 이 파일은 예제 설정 파일입니다.
+# 사용하려면 .sample 확장자를 제거하고 설정을 수정하세요.
+#
+# 예: mv example.conf.sample custom-site.conf
+
+# 추가 서버 블록 예제
+# server {
+#     listen 80;
+#     server_name example.com;
+#
+#     root /var/www/html;
+#     index index.html;
+#
+#     location / {
+#         try_files $uri $uri/ =404;
+#     }
+# }
+
+# 리버스 프록시 예제
+# server {
+#     listen 80;
+#     server_name api.example.com;
+#
+#     location / {
+#         proxy_pass http://backend:3000;
+#         proxy_set_header Host $host;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+#         proxy_set_header X-Forwarded-Proto $scheme;
+#     }
+# }
+
+# WebSocket 프록시 예제
+# server {
+#     listen 80;
+#     server_name ws.example.com;
+#
+#     location / {
+#         proxy_pass http://websocket-server:8080;
+#         proxy_http_version 1.1;
+#         proxy_set_header Upgrade $http_upgrade;
+#         proxy_set_header Connection "upgrade";
+#         proxy_set_header Host $host;
+#     }
+# }
+EOF
+    fi
+    
+    # README 파일 생성
+    if [ ! -f nginx-conf/README.md ]; then
+        cat > ./nginx-conf/README.md << 'EOF'
+# Nginx 설정 디렉토리
+
+이 디렉토리는 사용자 정의 Nginx 설정 파일을 저장하는 곳입니다.
+
+## 디렉토리 구조
+```
+nginx-conf/
+├── conf.d/              # 추가 서버 블록 설정 파일
+│   └── example.conf.sample  # 예제 설정 파일
+└── README.md           # 이 파일
+```
+
+## 사용 방법
+
+### 1. 새로운 사이트 추가
+
+`conf.d/` 디렉토리에 `.conf` 확장자를 가진 파일을 생성하세요:
+```bash
+# 예제 파일을 복사하여 시작
+cp conf.d/example.conf.sample conf.d/mysite.conf
+
+# 또는 새 파일 생성
+nano conf.d/mysite.conf
+```
+
+### 2. 설정 파일 작성
+```nginx
+server {
+    listen 80;
+    server_name mysite.com;
+
+    root /var/www/html;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ =404;
+    }
+}
+```
+
+### 3. 설정 적용
+
+설정 파일을 추가하거나 수정한 후:
+```bash
+# Nginx 설정 테스트
+docker exec nginx-ssh nginx -t
+
+# 설정이 올바르면 Nginx 재시작
+docker compose restart
+```
+
+## 주의사항
+
+- `.conf` 확장자를 가진 파일만 자동으로 로드됩니다
+- `.sample` 파일은 무시됩니다
+- 설정 변경 후 반드시 `nginx -t`로 문법 검사를 하세요
+- 문법 오류가 있으면 Nginx가 시작되지 않을 수 있습니다
+
+## 유용한 명령어
+```bash
+# Nginx 설정 테스트
+docker exec nginx-ssh nginx -t
+
+# Nginx 재시작
+docker compose restart
+
+# Nginx 로그 확인
+docker compose logs -f nginx-ssh
+
+# 컨테이너 내부 접속
+docker exec -it nginx-ssh bash
+```
+
+## 리버스 프록시 설정 예제
+
+다른 서비스로 요청을 전달하는 경우:
+```nginx
+server {
+    listen 80;
+    server_name api.example.com;
+
+    location / {
+        proxy_pass http://backend-service:3000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+```
+
+## SSL/TLS 설정 예제
+
+Let's Encrypt 인증서를 사용하는 경우:
+```nginx
+server {
+    listen 443 ssl;
+    server_name example.com;
+
+    ssl_certificate /etc/nginx/ssl/cert.pem;
+    ssl_certificate_key /etc/nginx/ssl/key.pem;
+
+    root /var/www/html;
+    index index.html;
+}
+```
+EOF
+    fi
+    
     # 현재 로그인된 사용자 확인
     REAL_USER=${SUDO_USER:-$USER}
     
     # 소유자를 실제 사용자로 변경
     chown -R $REAL_USER:$REAL_USER html
-    
-    # index.html도 소유자 변경
-    chown $REAL_USER:$REAL_USER html/index.html
+    chown -R $REAL_USER:$REAL_USER nginx-conf
     
     print_success "디렉토리 생성 완료"
     echo "  - ~/html/ (웹 루트 디렉토리, 소유자: $REAL_USER)"
+    echo "  - ~/nginx-conf/ (Nginx 설정 디렉토리, 소유자: $REAL_USER)"
+    echo "  - ~/nginx-conf/conf.d/ (추가 서버 블록 설정, 소유자: $REAL_USER)"
 }
 
 ################################################################################
@@ -399,6 +564,9 @@ if [ ! -z "$SSH_USER" ] && [ ! -z "$SSH_PASSWORD" ]; then
         # 사용자 홈 디렉토리에 html 링크 생성
         ln -sf /var/www/html /home/$SSH_USER/html
         
+        # 사용자 홈 디렉토리에 nginx-conf 링크 생성
+        ln -sf /etc/nginx/conf.d /home/$SSH_USER/nginx-conf
+        
         echo "SSH 사용자 '$SSH_USER' 생성 완료"
     fi
 fi
@@ -460,6 +628,7 @@ generate_docker_compose() {
 # - HTTP: http://YOUR_SERVER_IP:${HTTP_PORT}
 # - SSH: ssh ${SSH_USER}@YOUR_SERVER_IP -p ${SSH_PORT}
 # - HTML 경로: ~/html
+# - Nginx 설정: ~/nginx-conf/conf.d/
 #
 ################################################################################
 
@@ -483,6 +652,8 @@ services:
     volumes:
       # 웹 루트 디렉토리
       - ./html:/var/www/html
+      # Nginx 추가 설정 디렉토리 (conf.d)
+      - ./nginx-conf/conf.d:/etc/nginx/conf.d
     networks:
       - ${NETWORK_NAME}
 
@@ -522,8 +693,9 @@ SSH_USER=$SSH_USER
 # 타임존
 TIMEZONE=$TIMEZONE
 
-# HTML 경로
+# 경로 정보
 HTML_PATH=./html
+NGINX_CONF_PATH=./nginx-conf/conf.d
 
 # Docker 이미지
 IMAGE_NAME=nginx-ssh-custom:latest
@@ -531,6 +703,11 @@ IMAGE_NAME=nginx-ssh-custom:latest
 # 접속 정보:
 # HTTP: http://YOUR_SERVER_IP:${HTTP_PORT}
 # SSH: ssh ${SSH_USER}@YOUR_SERVER_IP -p ${SSH_PORT}
+
+# Nginx 설정 추가 방법:
+# 1. nginx-conf/conf.d/ 디렉토리에 .conf 파일 생성
+# 2. docker exec ${CONTAINER_NAME} nginx -t (설정 테스트)
+# 3. docker compose restart (적용)
 EOF
     
     chmod 600 .nginx-ssh-config
@@ -591,11 +768,14 @@ final_summary() {
     echo "📋 생성된 파일 및 디렉토리"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  ✓ Dockerfile (Docker 이미지 빌드 파일)"
-    echo "  ✓ default.conf (Nginx 설정)"
+    echo "  ✓ default.conf (Nginx 기본 설정)"
     echo "  ✓ entrypoint.sh (시작 스크립트)"
     echo "  ✓ docker-compose.yml (Docker Compose 설정)"
     echo "  ✓ .nginx-ssh-config (설정 정보)"
     echo "  ✓ html/ (웹 루트 디렉토리)"
+    echo "  ✓ nginx-conf/ (Nginx 설정 디렉토리)"
+    echo "  ✓ nginx-conf/conf.d/ (추가 서버 블록 설정)"
+    echo "  ✓ nginx-conf/README.md (Nginx 설정 가이드)"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "📝 설정 정보"
@@ -607,6 +787,7 @@ final_summary() {
     echo "  SSH 사용자      : $SSH_USER"
     echo "  타임존          : $TIMEZONE"
     echo "  HTML 경로       : html/"
+    echo "  Nginx 설정 경로 : nginx-conf/conf.d/"
     echo "  이미지          : nginx-ssh-custom:latest"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -625,19 +806,45 @@ final_summary() {
     echo "  # SSH로 접속"
     echo "  ssh ${SSH_USER}@${SERVER_IP} -p ${SSH_PORT}"
     echo ""
-    echo "  # 접속 후 html 디렉토리 확인"
-    echo "  cd ~/html"
-    echo "  ls -la"
+    echo "  # 접속 후 디렉토리 확인"
+    echo "  cd ~/html              # 웹 파일 디렉토리"
+    echo "  cd ~/nginx-conf        # Nginx 설정 디렉토리"
     echo ""
     echo "  # HTML 파일 업로드 (SCP 사용)"
     echo "  scp -P ${SSH_PORT} index.html ${SSH_USER}@${SERVER_IP}:~/html/"
     echo ""
-    echo "  # HTML 파일 업로드 (SFTP 사용)"
-    echo "  sftp -P ${SSH_PORT} ${SSH_USER}@${SERVER_IP}"
-    echo "  put index.html html/"
+    echo "  # Nginx 설정 파일 업로드 (SCP 사용)"
+    echo "  scp -P ${SSH_PORT} mysite.conf ${SSH_USER}@${SERVER_IP}:~/nginx-conf/"
     echo ""
-    echo "  # 웹 브라우저로 확인"
-    echo "  http://${SERVER_IP}:${HTTP_PORT}"
+    echo "  # Nginx 설정 테스트"
+    echo "  docker exec ${CONTAINER_NAME} nginx -t"
+    echo ""
+    echo "  # Nginx 재시작 (설정 적용)"
+    echo "  docker compose restart"
+    echo ""
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "⚙️ Nginx 설정 추가 방법"
+    echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+    echo "  1. 설정 파일 생성:"
+    echo "     nano nginx-conf/conf.d/mysite.conf"
+    echo ""
+    echo "  2. 설정 작성 (예시):"
+    echo "     server {"
+    echo "         listen 80;"
+    echo "         server_name example.com;"
+    echo "         root /var/www/html;"
+    echo "         location / {"
+    echo "             try_files \$uri \$uri/ =404;"
+    echo "         }"
+    echo "     }"
+    echo ""
+    echo "  3. 설정 테스트:"
+    echo "     docker exec ${CONTAINER_NAME} nginx -t"
+    echo ""
+    echo "  4. 적용:"
+    echo "     docker compose restart"
+    echo ""
+    echo "  💡 자세한 내용은 nginx-conf/README.md 파일을 참고하세요!"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "💡 유용한 명령어"
@@ -647,6 +854,8 @@ final_summary() {
     echo "  • 서비스 중지: docker compose down"
     echo "  • 컨테이너 상태: docker compose ps"
     echo "  • 컨테이너 접속: docker exec -it ${CONTAINER_NAME} bash"
+    echo "  • Nginx 설정 테스트: docker exec ${CONTAINER_NAME} nginx -t"
+    echo "  • Nginx 재로드: docker exec ${CONTAINER_NAME} nginx -s reload"
     echo "  • 이미지 재빌드: docker build -t nginx-ssh-custom:latest ."
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
@@ -659,6 +868,7 @@ final_summary() {
     echo "  4. 정기적인 비밀번호 변경"
     echo "  5. 디스크 공간 모니터링"
     echo "  6. 정기적인 보안 업데이트"
+    echo "  7. Nginx 설정 파일의 문법 오류 주의"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "📚 참고 문서"
@@ -666,6 +876,7 @@ final_summary() {
     echo "  • Nginx 문서: https://nginx.org/en/docs/"
     echo "  • Docker 문서: https://docs.docker.com/"
     echo "  • OpenSSH 문서: https://www.openssh.com/manual.html"
+    echo "  • Nginx 설정 가이드: nginx-conf/README.md"
     echo ""
     print_success "설치 스크립트를 완료했습니다!"
 }
@@ -706,3 +917,13 @@ main() {
 # 스크립트 실행
 ################################################################################
 main
+```
+
+## 주요 추가 기능
+
+### 1. **nginx-conf 디렉토리 구조**
+```
+nginx-conf/
+├── conf.d/                    # 추가 서버 블록 설정 파일
+│   └── example.conf.sample   # 예제 설정 파일
+└── README.md                 # 상세 사용 가이드
