@@ -179,7 +179,7 @@ get_user_input() {
     echo "HTTP 포트       : $HTTP_PORT"
     echo "SSH 사용자      : $SSH_USER"
     echo "타임존          : $TIMEZONE"
-    echo "HTML 경로       : ~/html"
+    echo "HTML 경로       : html/"
     echo ""
     read -p "이 설정으로 진행하시겠습니까? (y/N): " CONFIRM
     
@@ -213,11 +213,11 @@ create_directories() {
     print_header "디렉토리 구조 생성"
     
     # HTML 디렉토리 생성
-    mkdir -p ~/html
+    mkdir -p html
     
     # 기본 index.html 생성
-    if [ ! -f ~/html/index.html ]; then
-        cat > ~/html/index.html << 'EOF'
+    if [ ! -f html/index.html ]; then
+        cat > ./html/index.html << 'EOF'
 <!DOCTYPE html>
 <html lang="ko">
 <head>
@@ -250,7 +250,7 @@ create_directories() {
 <body>
     <div class="container">
         <h1>🎉 Nginx + SSH 서버가 실행 중입니다!</h1>
-        <p>HTML 파일을 ~/html 디렉토리에 업로드하세요.</p>
+        <p>HTML 파일을 ~/html/ 디렉토리에 업로드하세요.</p>
     </div>
 </body>
 </html>
@@ -463,7 +463,7 @@ services:
       - '${SSH_PORT}:22'
     volumes:
       # 웹 루트 디렉토리
-      - ~/html:/var/www/html
+      - ./html:/var/www/html
     networks:
       - ${NETWORK_NAME}
 
@@ -504,7 +504,7 @@ SSH_USER=$SSH_USER
 TIMEZONE=$TIMEZONE
 
 # HTML 경로
-HTML_PATH=~/html
+HTML_PATH=./html
 
 # Docker 이미지
 IMAGE_NAME=nginx-ssh-custom:latest
@@ -576,7 +576,7 @@ final_summary() {
     echo "  ✓ entrypoint.sh (시작 스크립트)"
     echo "  ✓ docker-compose.yml (Docker Compose 설정)"
     echo "  ✓ .nginx-ssh-config (설정 정보)"
-    echo "  ✓ ~/html/ (웹 루트 디렉토리)"
+    echo "  ✓ html/ (웹 루트 디렉토리)"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "📝 설정 정보"
@@ -587,7 +587,7 @@ final_summary() {
     echo "  HTTP 포트       : $HTTP_PORT"
     echo "  SSH 사용자      : $SSH_USER"
     echo "  타임존          : $TIMEZONE"
-    echo "  HTML 경로       : ~/html"
+    echo "  HTML 경로       : html/"
     echo "  이미지          : nginx-ssh-custom:latest"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
