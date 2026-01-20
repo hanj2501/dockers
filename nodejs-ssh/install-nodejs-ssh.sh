@@ -124,18 +124,31 @@ get_user_input() {
     fi
     print_success "SSH 포트: $SSH_PORT"
     
-    # Node.js 애플리케이션 포트
+    # Node.js 애플리케이션 외부 포트
     echo ""
-    echo -e "${CYAN}Node.js 애플리케이션 포트를 입력하세요 (기본값: 3000):${NC}"
-    read -p "> " APP_PORT
-    APP_PORT=${APP_PORT:-3000}
+    echo -e "${CYAN}Node.js 애플리케이션 외부 포트를 입력하세요 (호스트에서 접근할 포트, 기본값: 3000):${NC}"
+    read -p "> " APP_EXTERNAL_PORT
+    APP_EXTERNAL_PORT=${APP_EXTERNAL_PORT:-3000}
     
     # 포트 유효성 검사
-    if ! [[ "$APP_PORT" =~ ^[0-9]+$ ]] || [ "$APP_PORT" -lt 1 ] || [ "$APP_PORT" -gt 65535 ]; then
+    if ! [[ "$APP_EXTERNAL_PORT" =~ ^[0-9]+$ ]] || [ "$APP_EXTERNAL_PORT" -lt 1 ] || [ "$APP_EXTERNAL_PORT" -gt 65535 ]; then
         print_error "유효하지 않은 포트 번호입니다. (1-65535)"
         exit 1
     fi
-    print_success "애플리케이션 포트: $APP_PORT"
+    print_success "외부 포트: $APP_EXTERNAL_PORT"
+    
+    # Node.js 애플리케이션 내부 포트
+    echo ""
+    echo -e "${CYAN}Node.js 애플리케이션 내부 포트를 입력하세요 (컨테이너 내부 포트, 기본값: 3000):${NC}"
+    read -p "> " APP_INTERNAL_PORT
+    APP_INTERNAL_PORT=${APP_INTERNAL_PORT:-3000}
+    
+    # 포트 유효성 검사
+    if ! [[ "$APP_INTERNAL_PORT" =~ ^[0-9]+$ ]] || [ "$APP_INTERNAL_PORT" -lt 1 ] || [ "$APP_INTERNAL_PORT" -gt 65535 ]; then
+        print_error "유효하지 않은 포트 번호입니다. (1-65535)"
+        exit 1
+    fi
+    print_success "내부 포트: $APP_INTERNAL_PORT"
     
     # SSH 사용자 이름
     echo ""
@@ -221,14 +234,16 @@ get_user_input() {
     # 설정 확인
     echo ""
     print_header "입력한 설정 확인"
-    echo "컨테이너 이름    : $CONTAINER_NAME"
-    echo "네트워크 이름    : $NETWORK_NAME"
-    echo "SSH 포트        : $SSH_PORT"
-    echo "애플리케이션 포트 : $APP_PORT"
-    echo "SSH 사용자      : $SSH_USER"
-    echo "Node.js 버전    : $NODE_VERSION_NAME"
-    echo "타임존          : $TIMEZONE"
-    echo "작업 디렉토리    : app/"
+    echo "컨테이너 이름       : $CONTAINER_NAME"
+    echo "네트워크 이름       : $NETWORK_NAME"
+    echo "SSH 포트           : $SSH_PORT"
+    echo "앱 외부 포트       : $APP_EXTERNAL_PORT (호스트)"
+    echo "앱 내부 포트       : $APP_INTERNAL_PORT (컨테이너)"
+    echo "포트 매핑          : $APP_EXTERNAL_PORT:$APP_INTERNAL_PORT"
+    echo "SSH 사용자         : $SSH_USER"
+    echo "Node.js 버전       : $NODE_VERSION_NAME"
+    echo "타임존             : $TIMEZONE"
+    echo "작업 디렉토리       : app/"
     echo ""
     read -p "이 설정으로 진행하시겠습니까? (y/N): " CONFIRM
     
@@ -337,7 +352,7 @@ app.get('/', (req, res) => {
         <p>서버가 정상적으로 실행 중입니다!</p>
         <div class="info">
             <p><strong>Environment:</strong> ${process.env.NODE_ENV || 'development'}</p>
-            <p><strong>Port:</strong> ${PORT}</p>
+            <p><strong>Internal Port:</strong> ${PORT}</p>
         </div>
     </div>
 </body>
@@ -350,7 +365,8 @@ app.get('/api/status', (req, res) => {
     status: 'OK',
     timestamp: new Date().toISOString(),
     nodeVersion: process.version,
-    uptime: process.uptime()
+    uptime: process.uptime(),
+    port: PORT
   });
 });
 
@@ -556,7 +572,7 @@ COPY entrypoint.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh
 
 # 포트 노출
-EXPOSE 3000 22
+EXPOSE ${APP_INTERNAL_PORT} 22
 
 # 엔트리포인트 설정
 ENTRYPOINT ["/entrypoint.sh"]
@@ -661,14 +677,18 @@ generate_docker_compose() {
     # docker-compose.yml 파일 작성
     cat > docker-compose.yml << EOF
 ################################################################################
-# Node.js 22 + SSH Server
+# Node.js + SSH Server
 ################################################################################
-# Node.js 22 애플리케이션 서버와 SSH 접속이 가능한 환경
+# Node.js 애플리케이션 서버와 SSH 접속이 가능한 환경
 #
 # 접속 정보:
-# - HTTP: http://YOUR_SERVER_IP:${APP_PORT}
+# - HTTP: http://YOUR_SERVER_IP:${APP_EXTERNAL_PORT}
 # - SSH: ssh ${SSH_USER}@YOUR_SERVER_IP -p ${SSH_PORT}
 # - 애플리케이션 경로: ~/app
+#
+# 포트 매핑:
+# - 외부 포트 (호스트): ${APP_EXTERNAL_PORT}
+# - 내부 포트 (컨테이너): ${APP_INTERNAL_PORT}
 #
 ################################################################################
 
@@ -686,10 +706,10 @@ services:
       - SSH_PASSWORD=${SSH_PASSWORD}
       # Node.js 환경 변수
       - NODE_ENV=production
-      - PORT=${APP_PORT}
+      - PORT=${APP_INTERNAL_PORT}
     ports:
-      # Node.js 애플리케이션 포트
-      - '${APP_PORT}:${APP_PORT}'
+      # Node.js 애플리케이션 포트 (외부:내부)
+      - '${APP_EXTERNAL_PORT}:${APP_INTERNAL_PORT}'
       # SSH 포트
       - '${SSH_PORT}:22'
     volumes:
@@ -726,7 +746,8 @@ NETWORK_NAME=$NETWORK_NAME
 
 # 포트 정보
 SSH_PORT=$SSH_PORT
-APP_PORT=$APP_PORT
+APP_EXTERNAL_PORT=$APP_EXTERNAL_PORT
+APP_INTERNAL_PORT=$APP_INTERNAL_PORT
 
 # SSH 사용자 정보
 SSH_USER=$SSH_USER
@@ -744,8 +765,12 @@ IMAGE_NAME=nodejs-ssh-custom:latest
 NODE_VERSION=$NODE_VERSION
 
 # 접속 정보:
-# HTTP: http://YOUR_SERVER_IP:${APP_PORT}
+# HTTP: http://YOUR_SERVER_IP:${APP_EXTERNAL_PORT}
 # SSH: ssh ${SSH_USER}@YOUR_SERVER_IP -p ${SSH_PORT}
+
+# 포트 매핑:
+# - 외부 포트 (호스트): ${APP_EXTERNAL_PORT}
+# - 내부 포트 (컨테이너): ${APP_INTERNAL_PORT}
 
 # 애플리케이션 관리:
 # - 코드 수정 후 재시작: docker compose restart
@@ -822,25 +847,31 @@ final_summary() {
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "📝 설정 정보"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
-    echo "  컨테이너 이름    : $CONTAINER_NAME"
-    echo "  네트워크        : $NETWORK_NAME"
-    echo "  SSH 포트        : $SSH_PORT"
-    echo "  애플리케이션 포트 : $APP_PORT"
-    echo "  SSH 사용자      : $SSH_USER"
-    echo "  타임존          : $TIMEZONE"
-    echo "  Node.js 버전    : $NODE_VERSION_NAME"
-    echo "  패키지 매니저    : pnpm (npm도 사용 가능)"
-    echo "  작업 디렉토리    : app/"
-    echo "  이미지          : nodejs-ssh-custom:latest"
+    echo "  컨테이너 이름       : $CONTAINER_NAME"
+    echo "  네트워크           : $NETWORK_NAME"
+    echo "  SSH 포트           : $SSH_PORT"
+    echo "  앱 외부 포트       : $APP_EXTERNAL_PORT (호스트)"
+    echo "  앱 내부 포트       : $APP_INTERNAL_PORT (컨테이너)"
+    echo "  포트 매핑          : $APP_EXTERNAL_PORT:$APP_INTERNAL_PORT"
+    echo "  SSH 사용자         : $SSH_USER"
+    echo "  타임존             : $TIMEZONE"
+    echo "  Node.js 버전       : $NODE_VERSION_NAME"
+    echo "  패키지 매니저       : pnpm (npm도 사용 가능)"
+    echo "  작업 디렉토리       : app/"
+    echo "  이미지             : nodejs-ssh-custom:latest"
     echo ""
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "🌐 접속 정보"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "  📌 HTTP 접속:"
-    echo "     http://${SERVER_IP}:${APP_PORT}"
+    echo "     http://${SERVER_IP}:${APP_EXTERNAL_PORT}"
     echo ""
     echo "  📌 API 상태 확인:"
-    echo "     http://${SERVER_IP}:${APP_PORT}/api/status"
+    echo "     http://${SERVER_IP}:${APP_EXTERNAL_PORT}/api/status"
+    echo ""
+    echo "  📌 포트 매핑:"
+    echo "     외부 포트 (호스트): ${APP_EXTERNAL_PORT}"
+    echo "     내부 포트 (컨테이너): ${APP_INTERNAL_PORT}"
     echo ""
     echo "  📌 SSH 접속:"
     echo "     ssh ${SSH_USER}@${SERVER_IP} -p ${SSH_PORT}"
