@@ -461,6 +461,8 @@ RUN apt-get update && apt-get install -y \
     openssh-server \
     sudo \
     tzdata \
+    rsync \
+    git \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
